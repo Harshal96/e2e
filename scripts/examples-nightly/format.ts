@@ -107,7 +107,7 @@ function judge(row: Row): { verdict: Verdict; detail: string } {
   if (outcome.test !== 'success' || report.failed > 0 || report.interrupted > 0) {
     return { verdict: 'failed', detail: `${pass}${counts(report)}${time}` };
   }
-  if (report.passed === 0) return { verdict: 'failed', detail: `${pass}no test passed: ${counts(report)}` };
+  if (report.passed === 0 && report.flaky === 0) return { verdict: 'failed', detail: `${pass}no test passed: ${counts(report)}` };
   const verdict = report.flaky > 0 || row.secondPass !== undefined ? 'flaky' : 'passed';
   return { verdict, detail: `${pass}${counts(report)}${time}` };
 }

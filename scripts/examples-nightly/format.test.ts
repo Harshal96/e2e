@@ -42,6 +42,12 @@ test('failures name the stage that failed and link the log', () => {
   assert.match(message, /❌ \*ios expo\*: the job ended without a result/);
 });
 
+test('a successful suite whose tests only passed on retry is flaky', () => {
+  const message = formatMessage([{ outcome: outcome(), report: report({ passed: 0, flaky: 1 }) }], run);
+  assert.match(message, /^🟡 \*Nightly examples\*: all 1 passed, 1 flaky/);
+  assert.match(message, /🟡 \*Vite\* · web: 1 flaky, 0 passed/);
+});
+
 test('a run whose tests all skipped is not green', () => {
   const message = formatMessage([{ outcome: outcome(), report: report({ passed: 0, skipped: 5 }) }], run);
   assert.match(message, /❌ \*Vite\* · web: no test passed: 0 passed, 5 skipped/);
