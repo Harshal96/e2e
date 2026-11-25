@@ -15,11 +15,12 @@
  * `e2e init --example` can copy), partner and community examples living
  * outside it, partner examples in their author's own repository, community
  * examples pinned to a commit, and a `readme` only where the folder has no
- * README.md, in the example's own repository.
+ * README.md, in the example's own repository. READMEs on this repository's
+ * main branch are checked against the checkout.
  */
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { Ajv2020 } from 'ajv/dist/2020.js';
 import { REPO_ROOT } from './public-packages.ts';
@@ -111,23 +112,26 @@ export interface RegistryEnvironment {
   icons: string[];
   /** The folders `e2e init --example` can copy. */
   initExamples: string[];
+  /** Whether this repository-relative README is tracked and present in the checkout. */
+  hasReadme(path: string): boolean;
 }
 
 export function readEnvironment(): RegistryEnvironment {
+  const tracked = new Set(execFileSync('git', ['ls-files', '-z'], { cwd: REPO_ROOT, encoding: 'utf8' }).split('\0'));
   return {
     // Tracked folders only: a renamed example leaves an untracked folder (its
     // ignored node_modules) behind on disk, which must not count as an example.
     folders: [
       ...new Set(
-        execFileSync('git', ['ls-files', '-z', '--', 'examples/'], { cwd: REPO_ROOT, encoding: 'utf8' })
-          .split('\0')
+        [...tracked]
           .map((file) => file.split('/'))
-          .filter((parts) => parts.length > 2)
+          .filter((parts) => parts[0] === 'examples' && parts.length > 2)
           .map((parts) => parts[1]!),
       ),
     ],
     icons: existsSync(ICONS_DIR) ? readdirSync(ICONS_DIR) : [],
     initExamples: [...readFileSync(INIT_EXAMPLES_PATH, 'utf8').matchAll(/\{ id: '([a-z0-9-]+)'/g)].map((match) => match[1]!),
+    hasReadme: (file) => tracked.has(file) && statSync(join(REPO_ROOT, file), { throwIfNoEntry: false })?.isFile() === true,
   };
 }
 
@@ -208,6 +212,10 @@ export function registryProblems(registry: Registry, env: RegistryEnvironment): 
         problems.push(`${name}: a community example's readme is pinned to the same commit as its repository`);
       }
     }
+    const readme = localReadmePath(example);
+    if (readme !== undefined && !env.hasReadme(readme)) {
+      problems.push(`${name}: README file ${readme} is missing or untracked`);
+    }
     if (example.source === 'partner' && !example.author?.website) {
       problems.push(`${name}: a partner example names its author's landing page in author.website`);
     } else if (example.source !== 'partner' && example.author?.website) {
@@ -231,12 +239,14 @@ export function isLocalFolder(repository: string): boolean {
   return FOLDER_URL.test(repository);
 }
 
+type ReadmeExample = Pick<RegistryExample, 'repository' | 'readme'>;
+
 /**
  * The raw URL of the README the site renders as an example's page: its
  * `readme` file when it names one, else README.md in its `repository`.
  * `undefined` for an example with `readme: false`.
  */
-export function readmeUrl(example: Pick<RegistryExample, 'repository' | 'readme'>): string | undefined {
+export function readmeUrl(example: ReadmeExample): string | undefined {
   if (example.readme === false) return undefined;
   const parts = splitUrl(example.readme || example.repository);
   if (!parts) return undefined;
@@ -245,4 +255,20 @@ export function readmeUrl(example: Pick<RegistryExample, 'repository' | 'readme'
   return parts.host === 'github.com'
     ? `https://raw.githubusercontent.com/${parts.project}/${ref}/${path}`
     : `https://gitlab.com/${parts.project}/-/raw/${ref}/${path}`;
+}
+
+/** The path in the checkout when an in-repo example reads its README from main. */
+export function localReadmePath(example: ReadmeExample): string | undefined {
+  if (!isLocalFolder(example.repository)) return undefined;
+  const raw = readmeUrl(example);
+  if (raw === undefined) return undefined;
+  const { hostname, pathname } = new URL(raw);
+  const [, owner, repo, ref, ...segments] = pathname.split('/');
+  if (hostname !== 'raw.githubusercontent.com' || ref !== 'main' || `github.com/${owner}/${repo}`.toLowerCase() !== repoOf(example.repository)) return undefined;
+  const path = segments.join('/');
+  try {
+    return decodeURIComponent(path);
+  } catch {
+    return path;
+  }
 }

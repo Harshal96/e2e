@@ -12,7 +12,12 @@ import {
   schemaProblems,
 } from './examples-registry.ts';
 
-const ENV: RegistryEnvironment = { folders: ['with-vite'], icons: ['vite.svg'], initExamples: ['with-vite'] };
+const ENV: RegistryEnvironment = {
+  folders: ['with-vite'],
+  icons: ['vite.svg'],
+  initExamples: ['with-vite'],
+  hasReadme: (file) => file === 'examples/with-vite/README.md',
+};
 
 function registry(examples: Record<string, unknown>[] = []): Registry {
   return {
@@ -209,6 +214,43 @@ describe('registryProblems on official folders and tags', () => {
       ENV,
     );
     assert.deepEqual(problems, ['tags.platform: "web" is defined twice']);
+  });
+});
+
+describe('registryProblems on local READMEs', () => {
+  const noReadme = { ...ENV, hasReadme: () => false };
+
+  it('rejects a missing default README', () => {
+    assert.deepEqual(registryProblems(registry(), noReadme), [
+      'examples "with-vite": README file examples/with-vite/README.md is missing or untracked',
+    ]);
+  });
+
+  it('checks the README override on main', () => {
+    const base = registry();
+    base.examples[0]!.readme = 'https://github.com/e2e-inc/e2e/blob/main/docs/Vite%20setup.md';
+    assert.deepEqual(registryProblems(base, noReadme), [
+      'examples "with-vite": README file docs/Vite setup.md is missing or untracked',
+    ]);
+    assert.deepEqual(registryProblems(base, { ...ENV, hasReadme: (file) => file === 'docs/Vite setup.md' }), []);
+  });
+
+  it('looks up the normalized path GitHub will fetch', () => {
+    const base = registry();
+    base.examples[0]!.readme = 'https://github.com/e2e-inc/e2e/blob/main/docs/../README.md';
+    assert.deepEqual(registryProblems(base, { ...ENV, hasReadme: (file) => file === 'README.md' }), []);
+  });
+
+  it('accepts a local example without a README when it opts out', () => {
+    const base = registry();
+    base.examples[0]!.readme = false;
+    assert.deepEqual(registryProblems(base, noReadme), []);
+  });
+
+  it('leaves an override on another ref to the online check', () => {
+    const base = registry();
+    base.examples[0]!.readme = 'https://github.com/e2e-inc/e2e/blob/other-ref/docs/vite.md';
+    assert.deepEqual(registryProblems(base, noReadme), []);
   });
 });
 

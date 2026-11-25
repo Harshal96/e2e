@@ -3,16 +3,17 @@
  * https://e2e.com/examples, against `examples/examples.schema.json`
  * and the rules in `examples-registry.ts`.
  *
- * Usage: `node scripts/check-examples.ts [--online]`. `--online` also fetches
- * the README of every example hosted outside this repository, official,
- * partner, or community, which the site renders as the example's page (the
- * folder, for an example with `readme: false`); the `examples-registry` workflow runs it on pull requests that change
- * the registry. Exits 1 listing every problem.
+ * Usage: `node scripts/check-examples.ts [--online]`. Checks this repository's
+ * main-branch READMEs in the checkout. `--online` also checks the remaining
+ * README URLs, or the repository URL for an external example with
+ * `readme: false`. The examples-registry workflow uses `--online`.
+ * Exits 1 listing every problem.
  */
 
 import { readFileSync } from 'node:fs';
 import {
   isLocalFolder,
+  localReadmePath,
   REGISTRY_PATH,
   type Registry,
   readEnvironment,
@@ -22,7 +23,9 @@ import {
 } from './examples-registry.ts';
 
 async function readmeProblems(registry: Registry): Promise<string[]> {
-  const remote = registry.examples.filter((example) => !isLocalFolder(example.repository));
+  const remote = registry.examples.filter((example) =>
+    example.readme === false ? !isLocalFolder(example.repository) : localReadmePath(example) === undefined,
+  );
   const results = await Promise.all(
     remote.map(async (example) => {
       // Without a README the page links to the folder, so that is what must exist.

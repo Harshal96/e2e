@@ -31,7 +31,7 @@ e2e? Add it with a pull request.
    ```
 
 3. Open the pull request. CI validates the entry and fetches your README;
-   if you have the repository installed, `pnpm check:examples` runs the same
+   if you have the repository installed, `pnpm check:examples --online` runs the same
    check locally. The site updates once the pull request is merged.
 
 Your editor can autocomplete the fields from
@@ -93,7 +93,9 @@ The folders here are official examples, maintained by the e2e team:
 
 - Each folder needs an official entry in `examples.json` and a preset in
   `packages/e2e/src/cli/init/examples.ts`; `pnpm check:examples` fails
-  without them.
+  without them. It also checks that the default README or the override on
+  `main` is tracked and present in the checkout. Set `readme: false` to list
+  the example without a README.
 - Run the suite locally after changes, and update the README's "Last
   checked" versions.
 - Every example runs nightly on GitHub against the packages
